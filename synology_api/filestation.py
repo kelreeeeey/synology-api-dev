@@ -6,7 +6,7 @@ allowing file management, search, upload, download, and background task operatio
 """
 
 from __future__ import annotations
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 import os
 import io
 import time
@@ -2151,7 +2151,12 @@ class FileStation(base_api.BaseApi):
                 r.raise_for_status()
                 return io.BytesIO(r.content)
 
-    def generate_file_tree(self, folder_path: str, tree: Tree, max_depth: Optional[int] = 1, start_depth: Optional[int] = 0) -> None:
+    def generate_file_tree(self,
+                           folder_path: str,
+                           tree: Tree,
+                           max_depth: Optional[int] = 1,
+                           start_depth: Optional[int] = 0,
+                           filter_by: Optional[Callable] = None) -> None:
         """
         Recursively generate the file tree based on the folder path you give constrained with
 
@@ -2191,18 +2196,25 @@ class FileStation(base_api.BaseApi):
             folder_path=folder_path
         ).get("data")
 
-        files = data.get("files")
+        raw_files = data.get("files")
+
+        if isinstance(filter_by, Callable):
+            files = list(filter(lambda x: filter_by(x), raw_files))
+        else:
+            files = raw_files
+
+
         _file_info_getter = map(lambda x: (x.get('isdir'), x.get('name'), x.get('path')), files)
         for isdir, file_name, file_path in _file_info_getter:
 
             if isdir and (start_depth >= max_depth):
-                tree.create_node(file_name, file_path, parent=folder_path, data={"isdir":isdir, "max_depth":True})
+                tree.create_node(file_name, file_path, parent=folder_path, data={"isdir":isdir})
 
             elif isdir:
-                tree.create_node(file_name, file_path, parent=folder_path, data={"isdir":isdir, "max_depth":False})
-                self.generate_file_tree(file_path, tree, max_depth, start_depth + 1)
+                tree.create_node(file_name, file_path, parent=folder_path, data={"isdir":isdir})
+                self.generate_file_tree(file_path, tree, max_depth, start_depth + 1, filter_by)
 
             else:
-                tree.create_node(file_name, file_path, parent=folder_path, data={"isdir":isdir, "max_depth":False})
+                tree.create_node(file_name, file_path, parent=folder_path, data={"isdir":isdir})
 
 # TODO SYNO.FileStation.Thumb to be done
